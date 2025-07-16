@@ -1,0 +1,407 @@
+name: 🚀 Auto Cultivation Level Generator & Weekly Winner
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+jobs:
+  generate-level:
+    if: github.event.schedule != '0 0 * * 1'
+    name: 🌟 Generate Cultivation Level
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ✨ Cultivation System Banner
+        run: |
+          echo ""
+          echo "╔═══🌌══════════🌌═══╗"
+          echo "    🐉SPIRIT VEINS AWAKENED🐉  "
+          echo "  🏮IMMORTAL SEAL UNLOCKED🏮 "
+          echo "    🍃QI FLOW HARMONIZED🍃  "
+          echo "╚═══🌌══════════🌌═══╝"
+          echo ""
+
+      - name: 📝 Generate Next Cultivation Level
+        shell: bash
+        run: |
+          set -e
+          cultivation_levels=(
+            "Qi Condensation"
+            "Foundation Establishment"
+            "Core Formation"
+            "Nascent Soul"
+            "Soul Formation"
+            "Soul Transformation"
+            "Ascendant"
+            "Illusory Yin"
+            "Corporeal Yang"
+            "Nirvana Scryer"
+            "Nirvana Cleanser"
+            "Nirvana Shatterer"
+            "Heaven's Blight"
+            "Nirvana Void"
+            "Profound Void (Spirit Void)"
+            "Calamity Void (Arcane Void)"
+            "Void Tribulant"
+            "Half-step into Heaven (Half-Step Heaven Trampling)"
+            "Step into the Heaven (Heaven Trampling)"
+          )
+          # Function to get cultivation level based on score
+          get_cultivation_level() {
+            local score=$1
+            if ((score >= 1 && score <= 14)); then
+              echo "Qi Condensation"
+            elif ((score >= 15 && score <= 28)); then
+              echo "Foundation Establishment"
+            elif ((score >= 29 && score <= 42)); then
+              echo "Core Formation"
+            elif ((score >= 43 && score <= 56)); then
+              echo "Nascent Soul"
+            elif ((score >= 57 && score <= 70)); then
+              echo "Soul Formation"
+            elif ((score >= 71 && score <= 84)); then
+              echo "Soul Transformation"
+            elif ((score >= 85 && score <= 100)); then
+              echo "Ascendant"
+            elif ((score >= 101 && score <= 117)); then
+              echo "Illusory Yin"
+            elif ((score >= 118 && score <= 134)); then
+              echo "Corporeal Yang"
+            elif ((score >= 135 && score <= 151)); then
+              echo "Nirvana Scryer"
+            elif ((score >= 152 && score <= 168)); then
+              echo "Nirvana Cleanser"
+            elif ((score >= 169 && score <= 185)); then
+              echo "Nirvana Shatterer"
+            elif ((score >= 186 && score <= 200)); then
+              echo "Heaven's Blight"
+            elif ((score >= 201 && score <= 360)); then
+              echo "Nirvana Void"
+            elif ((score >= 361 && score <= 520)); then
+              echo "Profound Void (Spirit Void)"
+            elif ((score >= 521 && score <= 680)); then
+              echo "Calamity Void (Arcane Void)"
+            elif ((score >= 681 && score <= 840)); then
+              echo "Void Tribulant"
+            elif ((score >= 841 && score <= 1000)); then
+              echo "Half-step into Heaven (Half-Step Heaven Trampling)"
+            elif ((score >= 1001)); then
+              echo "Step into the Heaven (Heaven Trampling)"
+            else
+              echo "Unranked"
+            fi
+          }
+
+          mkdir -p levels
+          # Example: get the user's score from leaderboard.json (default to 1 if not found)
+          score=1
+          if [ -f data/leaderboard.json ]; then
+            user="${{ github.actor }}"
+            score=$(jq -r --arg user "$user" '.[$user] // 1' data/leaderboard.json)
+          fi
+          LEVEL_NAME=$(get_cultivation_level $score)
+          file_name="levels/level-$(date +%Y%m%d-%H%M)-${LEVEL_NAME}.txt"
+          {
+            echo "# Cultivation Level: $LEVEL_NAME"
+            echo "# Generated at: $(date -u)"
+            echo "# By: beebox603@gmail.com"
+            echo "# Score: $score"
+          } > "$file_name"
+          echo "LEVEL_NAME=$LEVEL_NAME" >> $GITHUB_ENV
+          echo "SCORE=$score" >> $GITHUB_ENV
+          echo "Created $file_name"
+
+      - name: ⏰ Generate Formatted Time
+        run: |
+          echo "FORMATTED_TIME=$(TZ='Asia/Jakarta' date '+%d/%m/%y %H:%M:%S')" >> $GITHUB_ENV
+
+      - name: 🔢 Generate Notification Counter
+        id: notif-counter
+        run: |
+          count=$(ls levels/level-*-*.txt 2>/dev/null | wc -l)
+          echo "NOTIF_COUNTER=$count" >> $GITHUB_ENV
+
+      - name: 🏆 Update Leaderboard
+        run: |
+          mkdir -p data
+          file="data/leaderboard.json"
+          user="${{ github.actor }}"
+          if ! command -v jq &>/dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          if [ ! -f "$file" ]; then
+            echo '{}' > "$file"
+          fi
+          new_json=$(jq --arg user "$user" '
+            .[$user] = (if .[$user] then .[$user] + 1 else 1 end)
+          ' "$file")
+          echo "$new_json" > "$file"
+
+      - name: 🌐 Update Global Leaderboard (SheetBest)
+        env:
+          SHEETBEST_URL: ${{ secrets.SHEETBEST_URL }}
+        run: |
+          if ! command -v jq &>/dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          REPO="${{ github.repository }}"
+          USER_ACTOR="${{ github.actor }}"
+          LEVEL="${{ env.LEVEL_NAME }}"
+          SCORE="${{ env.SCORE }}"
+          JSON=$(jq -nc --arg timestamp "$TIMESTAMP" --arg repo "$REPO" --arg user "$USER_ACTOR" --arg level "$LEVEL" --arg score "$SCORE" \
+            '{timestamp: $timestamp, repo: $repo, user: $user, level: $level, score: $score}')
+          curl -X POST "$SHEETBEST_URL" \
+            -H "Content-Type: application/json" \
+            -d "$JSON"
+
+      - name: 🏆 Fetch Global Leaderboard (SheetBest)
+        env:
+          SHEETBEST_URL: ${{ secrets.SHEETBEST_URL }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+          curl "$SHEETBEST_URL" > global_leaderboard.json
+
+          NOTIF_COUNTER="${{ env.NOTIF_COUNTER }}"
+          SCORE_SELF=$(jq -r --arg user "${{ github.actor }}" '[.[] | select(.user==$user)] | length' global_leaderboard.json)
+          echo "SCORE_SELF=$SCORE_SELF" >> $GITHUB_ENV
+
+          # Logic updated for better alignment
+          leaderboard=$(jq -r '
+            group_by(.user)
+            | map({ user: .[0].user, score: length })
+            | sort_by(-.score, .user)
+            | .[:10]
+            | (
+                # First pass to determine max length of the combined rank-prefix and user
+                map(
+                  .user as $u
+                  | .key as $k
+                  | (
+                      if $k == 0 then "🥇 "
+                      elif $k == 1 then "🥈 "
+                      elif $k == 2 then "🥉 "
+                      else "🏅 \($k+1). "
+                      end
+                    ) as $prefix
+                  | ($prefix + $u) | length
+                ) | max
+              ) as $max_combined_len
+            | to_entries
+            | map(
+                .value.user as $u
+                | .value.score as $score_val
+                | .key as $k
+                | (
+                    if $k == 0 then "🥇 "
+                    elif $k == 1 then "🥈 "
+                    elif $k == 2 then "🥉 "
+                    else "🏅 \($k+1). "
+                    end
+                  ) as $prefix
+                | ($prefix + $u) as $combined_string
+                | ($max_combined_len - ($combined_string | length)) as $spaces
+                | ($spaces | if . > 0 then (" " * .) else "" end) as $pad
+                | "\($combined_string)\($pad) | [Score: \($score_val)]"
+              )
+            | join("\n")
+          ' global_leaderboard.json)
+
+          if [ -z "$leaderboard" ] || [ "$leaderboard" == "null" ]; then
+            leaderboard="No leaderboard data yet"
+          fi
+
+          echo "LEADERBOARD_GLOBAL<<EOF" >> $GITHUB_ENV
+          echo "$leaderboard" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: 🎲 Get Random Donghua Fact
+        id: donghua-fact
+        run: |
+          DONGHUA_FACT=$(shuf -n 1 <<EOF
+          Tahukah kamu? Donghua seringkali diadaptasi dari novel wuxia atau xianxia populer!
+          Banyak donghua menampilkan konsep 'kultivasi', di mana karakter berlatih untuk mencapai keabadian.
+          Donghua 'Soul Land' (Douluo Dalu) adalah salah satu donghua 3D paling populer di Tiongkok.
+          Animasi Tiongkok modern, atau donghua, semakin populer di seluruh dunia karena kualitas visualnya.
+          Konsep 'Qi' atau energi spiritual adalah elemen kunci dalam banyak cerita donghua kultivasi.
+          Studio seperti Tencent Animation & Comics dan Bilibili adalah raksasa di industri donghua.
+          Banyak donghua menampilkan seni bela diri fantastis yang disebut 'wuxia' atau 'xianxia'.
+          Istilah 'donghua' secara harfiah berarti 'animasi Tiongkok'.
+          Genre donghua sangat beragam, dari fantasi epik hingga kehidupan sehari-hari.
+          Beberapa donghua paling terkenal seperti 'Battle Through the Heavens' dan 'A Will Eternal'.
+          Donghua seringkali memiliki alur cerita yang sangat panjang, mengikuti novel aslinya.
+          Karakter utama dalam donghua kultivasi seringkali memulai dari titik lemah dan berkembang pesat.
+          Efek visual dalam donghua 3D terus berkembang dan semakin memukau.
+          Banyak donghua yang dirilis dalam format serial mingguan.
+          Musik latar (OST) donghua seringkali sangat epik dan mendukung suasana cerita.
+          Beberapa donghua mengambil inspirasi dari mitologi dan sejarah Tiongkok.
+          Konsep 'reinkarnasi' atau 'transmigrasi' sering muncul dalam plot donghua.
+          'Martial Universe' (Wu Dong Qian Kun) adalah donghua xianxia populer lainnya.
+          Donghua 'Throne of Seal' (Shen Yin Wang Zuo) memiliki penggemar yang besar.
+          Desain karakter dalam donghua seringkali sangat detail dan indah.
+          Banyak donghua yang memiliki adaptasi game atau komik (manhua).
+          'Stellar Transformation' (Xing Chen Bian) adalah donghua sci-fi/xianxia yang unik.
+          Beberapa donghua berfokus pada pembangunan sekte atau klan.
+          'Perfect World' (Wan Mei Shi Jie) adalah donghua 3D dengan visual yang menawan.
+          Donghua seringkali menyertakan elemen humor dan romansa.
+          Konsep 'Dao' atau 'Jalan' adalah filosofi penting dalam kultivasi donghua.
+          'Swallowed Star' (Tun Shi Xing Kong) adalah donghua sci-fi dengan aksi intens.
+          Banyak donghua yang menampilkan monster atau makhluk spiritual yang kuat.
+          'The Westward' (Xi Xing Ji) adalah donghua fantasi dengan gaya seni yang khas.
+          Beberapa donghua berlatar di dunia modern dengan elemen fantasi tersembunyi.
+          'Against the Sky Supreme' (Ni Tian Xie Shen) adalah donghua dengan plot balas dendam.
+          Konsep 'pil' atau 'ramuan' sering digunakan untuk meningkatkan kultivasi.
+          'Tales of Demons and Gods' (Yao Shen Ji) adalah donghua populer lainnya.
+          Banyak donghua yang memiliki sistem peringkat kekuatan yang kompleks.
+          'Spirit Realm' (Ling Yu) adalah donghua fantasi dengan dunia yang luas.
+          Beberapa donghua menampilkan perjalanan waktu atau dunia paralel.
+          'The Great Ruler' (Da Zhu Zai) adalah donghua yang terkait dengan 'Battle Through the Heavens'.
+          Konsep 'artefak' atau 'senjata ilahi' sering menjadi bagian penting dalam donghua.
+          'Wu Geng Ji' (The Legend and the Hero) adalah donghua 3D dengan cerita yang dalam.
+          Banyak donghua yang berfokus pada persahabatan dan ikatan antar karakter.
+          'God of Martial Arts' (Wu Shen Zhu Zai) adalah donghua dengan banyak aksi.
+          Konsep 'tribulasi surgawi' adalah ujian yang harus dilewati kultivator.
+          'The Daily Life of the Immortal King' (Xian Wang de Richang Shenghuo) adalah donghua komedi.
+          Beberapa donghua memiliki plot misteri atau intrik politik.
+          'Renegade Immortal' (Xian Ni) adalah donghua yang lebih gelap dan serius.
+          Konsep 'formasi' atau 'array' digunakan untuk pertahanan atau serangan.
+          'A Record of a Mortal's Journey to Immortality' (Fan Ren Xiu Xian Chuan) dikenal realistis.
+          Banyak donghua yang menampilkan turnamen atau kompetisi kekuatan.
+          'Soul Land 2: The Unrivaled Tang Sect' adalah sekuel dari 'Soul Land'.
+          Konsep 'garis keturunan' atau 'bakat bawaan' penting dalam beberapa donghua.
+          'The King's Avatar' (Quan Zhi Gao Shou) adalah donghua e-sport yang sangat populer.
+          Beberapa donghua berfokus pada kehidupan sekolah atau akademi kultivasi.
+          'Forty Millenniums of Cultivation' adalah donghua sci-fi dengan tema kultivasi.
+          Konsep 'domain' atau 'alam pribadi' sering dikuasai oleh kultivator kuat.
+          'Spare Me, Great Lord!' (Da Wang Rao Ming) adalah donghua komedi aksi.
+          Banyak donghua yang menampilkan perjalanan panjang dan petualangan.
+          'Spirit Sword Sovereign' (Ling Jian Zun) adalah donghua dengan tema balas dendam.
+          Konsep 'karma' atau 'takdir' sering mempengaruhi alur cerita donghua.
+          'The Legend of Qin' (Qin Shi Ming Yue) adalah donghua sejarah fantasi yang terkenal.
+          Beberapa donghua memiliki gaya seni yang sangat unik dan eksperimental.
+          'Mo Dao Zu Shi' (Grandmaster of Demonic Cultivation) adalah donghua BL yang populer.
+          Konsep 'iblis' atau 'setan' sering menjadi antagonis utama.
+          'Scissor Seven' (Wu Liuqi) adalah donghua komedi aksi dengan gaya unik.
+          Banyak donghua yang menampilkan berbagai jenis binatang spiritual.
+          'The Founder of Diabolism' adalah nama lain untuk 'Mo Dao Zu Shi'.
+          Konsep 'alam rahasia' atau 'dimensi tersembunyi' sering menjadi lokasi penting.
+          'Fog Hill of Five Elements' (Wushan Wuxing) dikenal dengan animasinya yang indah.
+          Konsep 'Artifact Refining' adalah seni membuat artefak spiritual.
+          EOF
+          )
+          echo "DONGHUA_FACT=$DONGHUA_FACT" >> $GITHUB_ENV
+
+      - name: 🔔 Send Notification to Telegram
+        uses: appleboy/telegram-action@v0.1.0
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: |
+            <b>╔═══🌌══════════🌌═══╗</b>
+            <b>  🐉<b>SPIRIT VEINS AWAKENED</b>🐉  </b>
+            <b>🏮<b>IMMORTAL SEAL UNLOCKED</b>🏮 </b>
+            <b>    🍃QI FLOW HARMONIZED🍃  </b>
+            <b>╚═══🌌══════════🌌═══╝</b>
+
+            <b>• 🔁 TRIAL_RUN :</b> <code>${{ env.NOTIF_COUNTER }}</code>
+            <b>• 🏅 CULTIVATOR_SCORE :</b> <code>${{ env.SCORE_SELF }}</code>
+            <b>• 🏯 SECT_OWNER :</b> <code>${{ github.repository_owner }}</code>
+            <b>• 🚶 JOURNEY_AT :</b> <code>${{ env.FORMATTED_TIME }}</code>
+
+            <b>• 🧩 CULTIVATION_STAGE :</b> <code>${{ env.LEVEL_NAME }}</code>
+            <b>• 👤 IMMORTAL_NAME :</b> beeharry216@gmail.com
+
+            <b>🏆 <u>LEADERBOARD (TOP 10 GLOBAL)</u> 🏆</b>
+            ━━━━━━━━━━━━━━━━━━━━━━
+            <pre>${{ env.LEADERBOARD_GLOBAL }}</pre>
+            ━━━━━━━━━━━━━━━━━━━━━━
+
+            <b>⚙️ #DaoHeartUnbroken #DevOpsCultivation</b>
+            <b>👑 Script by Abie Haryatmo, Guardian of the Sect</b>
+            <b>🌌 "The immortal journey of cultivation in the DevOps realm continues..." 🌌</b>
+            <i>💡 Fun Fact Donghua: ${{ env.DONGHUA_FACT }}</i>
+
+          format: html
+
+      - name: 🤖 Configure Git
+        run: |
+          git config user.name "beeharry216"
+          git config user.email "beeharry216@gmail.com"
+
+      - name: 🚩 Commit & Push Changes (Auto-resolve Conflict)
+        run: |
+          set -e
+          git add levels/
+          git add data/leaderboard.json
+          git commit -m "✨ Cultivation Level: ${{ env.LEVEL_NAME }} (by ${{ github.actor }}) & update leaderboard" || echo "Nothing to commit"
+          git pull --rebase --autostash || {
+            echo "Conflict detected, resolving..."
+            git rebase --abort
+            git pull --no-rebase
+          }
+          git push
+
+  announce-weekly-winner:
+    if: github.event.schedule == '0 0 * * 1'
+    name: 🏅 Weekly Winner Announcement
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Leaderboard Data
+        env:
+          SHEETBEST_URL: ${{ secrets.SHEETBEST_URL }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+          curl "$SHEETBEST_URL" > global_leaderboard.json
+
+          week_start=$(date -u -d 'last monday' +%Y-%m-%d)
+          week_end=$(date -u +%Y-%m-%d)
+
+          winner=$(jq -r --arg start "$week_start" --arg end "$week_end" '
+            [ .[] | select(.timestamp >= ($start + "T00:00:00Z") and .timestamp < ($end + "T00:00:00Z")) ]
+            | group_by(.user)
+            | map({user: .[0].user, score: length})
+            | max_by(.score) // default if empty
+          ' global_leaderboard.json)
+
+          user=$(echo "$winner" | jq -r .user)
+          score=$(echo "$winner" | jq -r .score)
+
+          badge=""
+          if [ "$user" != "null" ] && [ -n "$user" ]; then
+            total_score=$(jq -r --arg user "$user" '
+              [ .[] | select(.user == $user) ] | length
+            ' global_leaderboard.json)
+
+            if [ "$total_score" -ge 1001 ]; then
+              badge="🏆 <b>Immortal</b>"
+            elif [ "$total_score" -ge 841 ]; then
+              badge="🌌 <b>Heaven Trampling</b>"
+            elif [ "$total_score" -ge 201 ]; then
+              badge="🔥 <b>Void Master</b>"
+            elif [ "$total_score" -ge 101 ]; then
+              badge="⭐ <b>Nirvana Adept</b>"
+            elif [ "$total_score" -ge 1 ]; then
+              badge="✨ <b>Qi Practitioner</b>"
+            fi
+          fi
+
+          if [ "$user" == "null" ] || [ -z "$user" ]; then
+            msg="No contributors for this week."
+          else
+            msg="🏆 <b>Weekly Winner</b> (Period $week_start to $(date -u -d "$week_end -1 day" +%Y-%m-%d)):\n\n<b>$user</b> with <b>$score</b> levels!\n$badge"
+          fi
+
+          echo "$msg" > winner_message.txt
+
+      - name: Send Telegram Announcement
+        uses: appleboy/telegram-action@v0.1.0
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message_file: winner_message.txt
+          format: html
